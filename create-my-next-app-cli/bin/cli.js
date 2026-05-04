@@ -6,9 +6,9 @@
  * A small, dependency-free Node.js CLI for scaffolding a Next.js project from
  * a GitHub template repository.
  *
- * Publish this package to npm, then users can run:
+ * Publish this package to GitHub Packages, then users can run:
  *
- *   npx create-my-next-app my-project
+ *   npx @ramdevcalope1995/create-my-next-app my-project
  *
  * Keep this file thin: it owns CLI orchestration, while filesystem/process
  * helpers live in ../lib/utils.js.
@@ -30,12 +30,10 @@ import {
 } from "../lib/utils.js";
 
 /**
- * Replace this with your public Apache-2.0 licensed Next.js template repo.
- *
  * The clone is shallow (`--depth 1`) so startup is fast and history is not
  * downloaded. The `.git` folder is removed immediately after cloning.
  */
-const TEMPLATE_REPO_URL = "https://github.com/USERNAME/REPO_NAME.git";
+const TEMPLATE_REPO_URL = "https://github.com/ramdevcalope1995/kindredaistudio.git";
 
 async function main() {
   const rawProjectName = process.argv[2] || (await promptForProjectName());

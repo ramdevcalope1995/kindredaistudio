@@ -1,11 +1,24 @@
 {
-  "name": "create-my-next-app",
+  "name": "@ramdevcalope1995/create-my-next-app",
   "version": "1.0.0",
-  "description": "Scaffold a local Next.js app from the My Next App template.",
+  "description": "Scaffold a local Next.js app from the Kindred AI Studio template.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
     "create-my-next-app": "./bin/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ramdevcalope1995/kindredaistudio.git",
+    "directory": "create-my-next-app-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/ramdevcalope1995/kindredaistudio/issues"
+  },
+  "homepage": "https://github.com/ramdevcalope1995/kindredaistudio#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "files": [
     "bin",
@@ -23,6 +36,7 @@
     "cli"
   ],
   "scripts": {
-    "start": "node ./bin/cli.js"
+    "start": "node ./bin/cli.js",
+    "pack:dry-run": "npm pack --dry-run"
   }
 }
