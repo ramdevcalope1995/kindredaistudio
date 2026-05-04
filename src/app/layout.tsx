@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Nunito } from "next/font/google";
 import "../styles.css";
+import AuthProvider from '@/components/AuthProvider';
+import AnalyticsProvider from '@/components/AnalyticsProvider';
 
 const nunito = Nunito({
   subsets: ["latin"],
@@ -28,7 +30,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={jetbrainsMono.variable}>
-      <body className={nunito.className}>{children}</body>
+      <body className={nunito.className}>
+        <AuthProvider>
+          <AnalyticsProvider>
+            {children}
+          </AnalyticsProvider>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

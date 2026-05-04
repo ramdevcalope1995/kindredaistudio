@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
@@ -28,10 +29,7 @@ interface User {
   name: string | null;
 }
 
-const projects = [
-  { title: "Claude Companion Chat", edited: "Edited 31 minutes ago" },
-  { title: "Kindred AI Studio", edited: "Edited 4 hours ago" },
-];
+
 
 export function DashboardApp() {
   const router = useRouter();
@@ -42,6 +40,9 @@ export function DashboardApp() {
   const [generating, setGenerating] = useState(false);
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [ideOpen, setIdeOpen] = useState(false);
+  const [projects, setProjects] = useState<Array<{ title: string; edited: string }>>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [collaborators, setCollaborators] = useState<Array<{ id: string; name: string; avatar: string; color: string }>>([]);
   const ranInitialPrompt = useRef(false);
 
   useEffect(() => {
@@ -54,10 +55,32 @@ export function DashboardApp() {
       const data = (await res.json()) as { user: User };
       setUser(data.user);
       setLoadingUser(false);
+      
+      // Load projects after user is authenticated
+      await loadProjects();
     };
 
     void loadUser();
   }, [router]);
+
+  const loadProjects = async () => {
+    setLoadingProjects(true);
+    try {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data.projects || []);
+      } else {
+        // Fallback to empty array if API fails
+        setProjects([]);
+      }
+    } catch (error) {
+      console.error("Failed to load projects:", error);
+      setProjects([]);
+    } finally {
+      setLoadingProjects(false);
+    }
+  };
 
   const generate = useCallback(
     async (raw: string) => {
@@ -137,16 +160,16 @@ export function DashboardApp() {
             <ChevronDown className="size-4 text-white/70" />
           </button>
 
-          <nav className="space-y-1 text-[15px] font-black">
-            <SideItem active icon={<Home />} label="Home" />
+           <nav className="space-y-1 text-[15px] font-black">
+            <SideItem active icon={<Home />} label="Home" href="/dashboard" />
             <SideItem icon={<Search />} label="Search" shortcut="Ctrl K" />
             <SideItem icon={<Sparkles />} label="Resources" />
-            <SideItem icon={<Boxes />} label="Connectors" />
+            <SideItem icon={<Boxes />} label="Connectors" href="/dashboard/connectors" />
           </nav>
 
-          <div className="mt-8 space-y-1 text-[15px] font-black">
+           <div className="mt-8 space-y-1 text-[15px] font-black">
             <p className="mb-3 px-2 text-sm text-white/45">Projects</p>
-            <SideItem icon={<LayoutGrid />} label="All projects" />
+            <SideItem icon={<LayoutGrid />} label="All projects" href="/dashboard" />
             <SideItem icon={<Star />} label="Starred" />
             <SideItem icon={<Users />} label="Created by me" />
             <SideItem icon={<Users />} label="Shared with me" />
@@ -240,22 +263,55 @@ export function DashboardApp() {
               </div>
 
               <div className="grid gap-8 xl:grid-cols-2">
-                {projects.map((project) => (
-                  <article key={project.title}>
-                    <div className="grid h-56 place-items-center rounded-xl bg-[#15161b] text-white/45">
-                      <Code2 className="size-9 opacity-60" />
-                    </div>
-                    <div className="mt-5 flex items-center gap-4">
-                      <div className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-[#294d99] to-[#ff6238] text-xs font-black">
-                        {displayName.slice(0, 1).toUpperCase()}
+                {loadingProjects ? (
+                  // Loading state while projects are being fetched
+                  <>
+                    {[...Array(2)].map((_, index) => (
+                      <article key={`loading-${index}`}>
+                        <div className="grid h-56 place-items-center rounded-xl bg-[#15161b] text-white/45">
+                          <div className="animate-pulse">
+                            <Code2 className="size-9 opacity-60" />
+                          </div>
+                        </div>
+                        <div className="mt-5 flex items-center gap-4">
+                          <div className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-[#294d99] to-[#ff6238] text-xs font-black">
+                            {displayName.slice(0, 1).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="h-4 bg-gray-700 rounded w-32 mb-2"></div>
+                            <div className="h-3 bg-gray-700 rounded w-24"></div>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </>
+                ) : projects.length > 0 ? (
+                  projects.map((project) => (
+                    <article key={project.title}>
+                      <div className="grid h-56 place-items-center rounded-xl bg-[#15161b] text-white/45">
+                        <Code2 className="size-9 opacity-60" />
                       </div>
-                      <div>
-                        <h2 className="text-lg font-black">{project.title}</h2>
-                        <p className="mt-1 text-base font-bold text-white/52">{project.edited}</p>
+                      <div className="mt-5 flex items-center gap-4">
+                        <div className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-[#294d99] to-[#ff6238] text-xs font-black">
+                          {displayName.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-black">{project.title}</h2>
+                          <p className="mt-1 text-base font-bold text-white/52">{project.edited}</p>
+                        </div>
                       </div>
+                    </article>
+                  ))
+                ) : (
+                  // Empty state when no projects exist
+                  <div className="col-span-2 text-center py-12">
+                    <div className="grid place-items-center rounded-xl bg-[#15161b] h-56 mb-5">
+                      <Code2 className="size-12 opacity-40" />
                     </div>
-                  </article>
-                ))}
+                    <h3 className="text-xl font-bold text-white/60">No projects yet</h3>
+                    <p className="mt-2 text-base font-normal text-white/50">Create your first project to get started</p>
+                  </div>
+                )}
               </div>
             </section>
           </div>
@@ -272,18 +328,16 @@ function SideItem({
   label,
   active,
   shortcut,
+  href,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
   shortcut?: string;
+  href?: string;
 }) {
-  return (
-    <button
-      className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left ${
-        active ? "bg-white/22 text-white" : "text-white/82 hover:bg-white/8"
-      }`}
-    >
+  const buttonContent = (
+    <>
       <span className="grid size-5 place-items-center [&_svg]:size-4">{icon}</span>
       <span>{label}</span>
       {shortcut && (
@@ -291,6 +345,29 @@ function SideItem({
           {shortcut}
         </span>
       )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left ${
+          active ? "bg-white/22 text-white" : "text-white/82 hover:bg-white/8"
+        }`}
+      >
+        {buttonContent}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left ${
+        active ? "bg-white/22 text-white" : "text-white/82 hover:bg-white/8"
+      }`}
+    >
+      {buttonContent}
     </button>
   );
 }

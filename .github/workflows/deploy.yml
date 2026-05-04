@@ -1,0 +1,137 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_DEFAULT_REGION: us-east-1
+  TF_VAR_aws_region: us-east-1
+  TF_VAR_environment: prod
+  TF_VAR_project_name: kindred-ai-studio
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ env.AWS_DEFAULT_REGION }}
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+        role-session-name: GitHubActionsSession
+
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init \
+          -backend-config="bucket=${{ secrets.TERRAFORM_STATE_BUCKET }}" \
+          -backend-config="key=kindred-ai-studio/terraform.tfstate" \
+          -backend-config="region=${{ env.AWS_DEFAULT_REGION }}" \
+          -backend-config="encrypt=true" \
+          -backend-config="dynamodb_table=${{ secrets.TERRAFORM_LOCK_TABLE }}"
+
+    - name: Terraform Plan
+      run: |
+        cd terraform
+        terraform plan \
+          -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve \
+          -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    needs: terraform
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ env.AWS_DEFAULT_REGION }}
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+        role-session-name: GitHubActionsSession
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Get ECR URIs
+      id: ecr_uris
+      run: |
+        APP_URI=$(aws ecr describe-repositories --repository-names ${{ env.TF_VAR_project_name }}-app --query 'repositories[0].repositoryUri' --output text)
+        SERVER_URI=$(aws ecr describe-repositories --repository-names ${{ env.TF_VAR_project_name }}-server --query 'repositories[0].repositoryUri' --output text)
+        echo "APP_URI=$APP_URI" >> $GITHUB_OUTPUT
+        echo "SERVER_URI=$SERVER_URI" >> $GITHUB_OUTPUT
+
+    - name: Build and push App image
+      run: |
+        docker build -t ${{ steps.ecr_uris.outputs.APP_URI }}:latest .
+        docker push ${{ steps.ecr_uris.outputs.APP_URI }}:latest
+
+    - name: Build and push Server image
+      run: |
+        docker build -f Dockerfile.server -t ${{ steps.ecr_uris.outputs.SERVER_URI }}:latest .
+        docker push ${{ steps.ecr_uris.outputs.SERVER_URI }}:latest
+
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ env.AWS_DEFAULT_REGION }}
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+        role-session-name: GitHubActionsSession
+
+    - name: Get ECR URIs
+      id: ecr_uris
+      run: |
+        APP_URI=$(aws ecr describe-repositories --repository-names ${{ env.TF_VAR_project_name }}-app --query 'repositories[0].repositoryUri' --output text)
+        SERVER_URI=$(aws ecr describe-repositories --repository-names ${{ env.TF_VAR_project_name }}-server --query 'repositories[0].repositoryUri' --output text)
+        echo "APP_URI=$APP_URI" >> $GITHUB_OUTPUT
+        echo "SERVER_URI=$SERVER_URI" >> $GITHUB_OUTPUT
+
+    - name: Render ECS task definitions
+      run: |
+        sed "s|APP_IMAGE_URI|${{ steps.ecr_uris.outputs.APP_URI }}:latest|" ecs-task-definition-app.json.template > ecs-task-definition-app.json
+        sed "s|SERVER_IMAGE_URI|${{ steps.ecr_uris.outputs.SERVER_URI }}:latest|" ecs-task-definition-server.json.template > ecs-task-definition-server.json
+
+    - name: Update ECS services
+      run: |
+        aws ecs update-service --cluster ${{ env.TF_VAR_project_name }}-cluster --service ${{ env.TF_VAR_project_name }}-app-service --task-definition file://ecs-task-definition-app.json
+        aws ecs update-service --cluster ${{ env.TF_VAR_project_name }}-cluster --service ${{ env.TF_VAR_project_name }}-server-service --task-definition file://ecs-task-definition-server.json

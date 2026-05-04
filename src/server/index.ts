@@ -2,6 +2,12 @@ import bcrypt from "bcryptjs";
 import cors from "cors";
 import "dotenv/config";
 import express, { type NextFunction, type Request, type Response } from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import * as Sentry from '@sentry/node';
+import * as Tracing from '@sentry/tracing';
 import { Buffer } from "node:buffer";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Pool } from "pg";
@@ -49,11 +55,113 @@ const sessionMaxAgeMs = 1000 * 60 * 60 * 24 * 7;
 let pool: Pool | null = null;
 let initPromise: Promise<void> | null = null;
 
+// Create HTTP server and attach Socket.IO
+// Initialize Sentry error monitoring
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || '', // Will not initialize if no DSN provided
+  integrations: [
+    // Enable HTTP instrumentation (recommended)
+    new Sentry.Integrations.Http({ tracing: true }),
+    // Enable Express tracing
+    new Tracing.Integrations.Express({ app }),
+    // Automatically instrument Node.js standard library modules
+    ...Sentry.autoDiscoverNodePerformanceMonitoringIntegrations(),
+  ],
+  tracesSampleRate: 1.0, //  Capture 100% of the transactions
+  environment: process.env.NODE_ENV || 'development',
+});
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: clientOrigin,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
+      fontSrc: ["'self'", "fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'", "https://*.sentry.io", clientOrigin.replace(/^https?:\/\//, '')],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Apply rate limiting to all requests
+app.use(limiter);
+
+// The request handler must be the first middleware on the app
+app.use(Sentry.Handlers.requestHandler());
+app.use(Sentry.Handlers.tracingHandler());
+
 app.use(cors({ origin: clientOrigin, credentials: true }));
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+// Socket.IO real-time collaboration
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  socket.on('join-room', (roomId: string, userId: string) => {
+    socket.join(roomId);
+    socket.to(roomId).emit('user-joined', { userId, socketId: socket.id });
+    
+    // Notify room about current collaborators
+    const room = io.sockets.adapter.rooms.get(roomId);
+    const currentUsers = room ? Array.from(room) : [];
+    io.to(socket.id).emit('room-users', { roomId, users: currentUsers.length });
+  });
+
+  socket.on('leave-room', (roomId: string) => {
+    socket.leave(roomId);
+    socket.to(roomId).emit('user-left', { socketId: socket.id });
+  });
+
+  socket.on('code-change', (data: { roomId: string; userId: string; code: string; timestamp: number }) => {
+    socket.to(data.roomId).emit('code-update', data);
+  });
+
+  socket.on('cursor-move', (data: { roomId: string; userId: string; position: { x: number; y: number }; timestamp: number }) => {
+    socket.to(data.roomId).emit('cursor-update', data);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
+
+// More restrictive rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 auth attempts per windowMs
+  message: 'Too many authentication attempts from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.post(
   "/api/auth/signup",
+  authLimiter,
   express.json({ limit: "128kb" }),
   asyncHandler(async (req, res) => {
     const data = AuthInput.parse(req.body);
@@ -78,6 +186,7 @@ app.post(
 
 app.post(
   "/api/auth/login",
+  authLimiter,
   express.json({ limit: "128kb" }),
   asyncHandler(async (req, res) => {
     const data = AuthInput.parse(req.body);
@@ -116,9 +225,94 @@ app.get(
   }),
 );
 
+app.get(
+  "/api/projects",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await getAuthenticatedUser(req);
+    if (!user) throw new HttpError(401, "Not authenticated");
+    await initDb();
+
+    // Get user's projects from database
+    const result = await getPool().query<{
+      id: string;
+      title: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `SELECT id, title, user_id, created_at, updated_at 
+       FROM projects 
+       WHERE user_id = $1 
+       ORDER BY updated_at DESC LIMIT 10`,
+      [user.id],
+    );
+
+    const projects = result.rows.map(row => ({
+      id: row.id,
+      title: row.title,
+      edited: `Edited ${formatTimeAgo(new Date(row.updated_at))}`
+    }));
+
+    res.json({ projects });
+  }),
+);
+
+app.post(
+  "/api/projects",
+  requireAuth,
+  express.json({ limit: "128kb" }),
+  asyncHandler(async (req, res) => {
+    const user = await getAuthenticatedUser(req);
+    if (!user) throw new HttpError(401, "Not authenticated");
+    const { title } = req.body;
+    
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      throw new HttpError(400, "Title is required");
+    }
+    
+    await initDb();
+    
+    const result = await getPool().query<{
+      id: string;
+      title: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `INSERT INTO projects (title, user_id) 
+       VALUES ($1, $2) 
+       RETURNING id, title, user_id, created_at, updated_at`,
+      [title.trim(), user.id],
+    );
+
+    const project = {
+      id: result.rows[0].id,
+      title: result.rows[0].title,
+      edited: `Edited ${formatTimeAgo(new Date(result.rows[0].updated_at))}`
+    };
+
+    res.status(201).json({ project });
+  }),
+);
+
+// Rate limiting for API generation endpoints
+const generateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // Limit each authenticated user to 10 requests per minute
+  message: 'Too many generation requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Use the authenticated user ID as the key
+    return (req as any).user?.id || req.ip || 'unknown';
+  },
+});
+
 app.post(
   "/api/generate",
   requireAuth,
+  generateLimiter,
   express.json({ limit: "1mb" }),
   asyncHandler(async (req, res) => {
     const data = GenerateInput.parse(req.body);
@@ -272,7 +466,14 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).send(err instanceof Error ? err.message : "Internal server error");
 });
 
-app.listen(port, () => {
+// Sentry error handler (must be before other error middleware)
+app.use(Sentry.Handlers.errorHandler());
+
+httpServer.listen(port, () => {
+  console.log(`API server listening on http://localhost:${port}`);
+});
+
+httpServer.listen(port, () => {
   console.log(`API server listening on http://localhost:${port}`);
 });
 
@@ -313,16 +514,56 @@ async function initDb() {
         name text,
         created_at timestamptz not null default now()
       );
+
+      create table if not exists projects (
+        id uuid primary key default gen_random_uuid(),
+        title text not null,
+        user_id uuid not null references users(id) on delete cascade,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+
+      -- Trigger to update the updated_at column
+      create or replace function update_updated_at_column()
+      returns trigger as $$
+      begin
+        new.updated_at = now();
+        return new;
+      end;
+      $$ language plpgsql;
+
+      create trigger update_projects_updated_at
+        before update on projects
+        for each row
+        execute function update_updated_at_column();
+
+      create index if not exists idx_projects_user_id on projects(user_id);
+      create index if not exists idx_projects_updated_at on projects(updated_at);
     `,
     )
     .then(() => undefined);
   return initPromise;
 }
 
-async function requireAuth(req: Request, _res: Response, next: NextFunction) {
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return "just now";
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} months ago`;
+  
+  return `${Math.floor(diffInSeconds / 31536000)} years ago`;
+}
+
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const user = await getAuthenticatedUser(req);
     if (!user) throw new HttpError(401, "Not authenticated");
+    // Attach user to request for other middlewares
+    (req as any).user = user;
     next();
   } catch (err) {
     next(err);

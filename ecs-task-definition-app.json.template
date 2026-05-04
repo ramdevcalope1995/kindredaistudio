@@ -1,0 +1,73 @@
+{
+  "family": "kindred-ai-studio-app",
+  "networkMode": "awsvpc",
+  "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/kindred-ai-studio-app-role",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "app",
+      "image": "APP_IMAGE_URI",
+      "essential": true,
+      "portMappings": [
+        {
+          "name": "app-port",
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "NEXT_PUBLIC_BACKEND_URL",
+          "value": "http://server:4000"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "DB_ENDPOINT"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "arn:aws:ssm:us-east-1:YOUR_ACCOUNT_ID:parameter/kindred-ai-studio/anthropic_api_key"
+        },
+        {
+          "name": "ELEVENLABS_API_KEY",
+          "value": "arn:aws:ssm:us-east-1:YOUR_ACCOUNT_ID:parameter/kindred-ai-studio/elevenlabs_api_key"
+        },
+        {
+          "name": "DEEPGRAM_API_KEY",
+          "value": "arn:aws:ssm:us-east-1:YOUR_ACCOUNT_ID:parameter/kindred-ai-studio/deepgram_api_key"
+        },
+        {
+          "name": "E2B_API_KEY",
+          "value": "arn:aws:ssm:us-east-1:YOUR_ACCOUNT_ID:parameter/kindred-ai-studio/e2b_api_key"
+        },
+        {
+          "name": "SESSION_SECRET",
+          "value": "arn:aws:ssm:us-east-1:YOUR_ACCOUNT_ID:parameter/kindred-ai-studio/session_secret"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/kindred-ai-studio-app",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

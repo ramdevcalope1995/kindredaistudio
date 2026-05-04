@@ -1,6 +1,6 @@
 # Kindred AI Studio
 
-A Next.js + Node.js app for a Lovable-style vibe coding experience. It includes a landing page, email/password auth, a protected dashboard, AI code generation, voice features, and a separate Node/Express backend.
+A Next.js + Node.js app for a Lovable-style vibe coding experience. It includes a landing page, email/password auth, a protected dashboard, AI code generation, voice features, MCP (Model Context Protocol) integration, and a separate Node/Express backend.
 
 ## Requirements
 
@@ -74,11 +74,23 @@ npm run lint
 src/app/(root)            Landing page
 src/app/(auth)            Sign in and sign up pages
 src/app/(dashboard)       Protected dashboard route
+src/app/(dashboard)/connectors  Connectors and integrations page
 src/components/landing    Landing page UI
 src/components/auth       Auth UI
 src/components/dashboard  Dashboard UI
+src/components/MCPConnector.tsx  MCP integration component
 src/server/index.ts       Node/Express backend
 ```
+
+## Features
+
+- **AI-Powered Code Generation**: Generate apps and UI components from natural language prompts
+- **MCP (Model Context Protocol) Integration**: Connect AI agents to your development environment for real-time access to application state
+- **Secure Code Sandboxing**: Execute generated code safely in E2B sandbox environments
+- **Voice Features**: Speech-to-text and text-to-speech capabilities
+- **Project Management**: Organized workspace for managing multiple projects
+- **Database Integration**: Neon PostgreSQL for cloud-based data storage
+- **Connectors Hub**: Centralized management of external service integrations
 
 ## CLI Package
 
@@ -100,9 +112,31 @@ Then publish that package to npm so users can run:
 npx kindredaistudio my-project
 ```
 
+## MCP (Model Context Protocol) Integration
+
+This project includes MCP support for enhanced AI development experiences. To use MCP features:
+
+1. Ensure you have the `.mcp.json` file in the project root
+2. Start the development server with `npm run dev`
+3. MCP-compatible AI agents can connect to your development environment automatically
+
+The `.mcp.json` file configures the Next.js DevTools MCP server:
+
+```json
+{
+  "mcpServers": {
+    "next-devtools": {
+      "command": "npx",
+      "args": ["-y", "next-devtools-mcp@latest"]
+    }
+  }
+}
+```
+
 ## Production Notes
 
 - Use a strong `SESSION_SECRET`.
 - Use a managed PostgreSQL database and update `DATABASE_URL`.
 - Never commit real API keys.
 - Set `BACKEND_URL` for the Next.js API proxy if the backend is not running on `http://localhost:4000`.
+- For production deployments, MCP features may need to be configured differently based on your deployment platform.
