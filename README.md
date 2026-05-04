@@ -1,4 +1,4 @@
-# Lovable Clone
+# Kindred AI Studio
 
 A Next.js + Node.js app for a Lovable-style vibe coding experience. It includes a landing page, email/password auth, a protected dashboard, AI code generation, voice features, and a separate Node/Express backend.
 
