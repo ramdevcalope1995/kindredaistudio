@@ -1,0 +1,28 @@
+{
+  "name": "create-my-next-app",
+  "version": "1.0.0",
+  "description": "Scaffold a local Next.js app from the My Next App template.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "create-my-next-app": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "keywords": [
+    "nextjs",
+    "create",
+    "scaffold",
+    "template",
+    "cli"
+  ],
+  "scripts": {
+    "start": "node ./bin/cli.js"
+  }
+}
