@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * create-my-next-app
+ * kindredaistudio
  *
  * A small, dependency-free Node.js CLI for scaffolding a Next.js project from
  * a GitHub template repository.
  *
  * Publish this package to GitHub Packages, then users can run:
  *
- *   npx @ramdevcalope1995/create-my-next-app my-project
+ *   npx @ramdevcalope1995/kindredaistudio my-project
  *
  * Keep this file thin: it owns CLI orchestration, while filesystem/process
  * helpers live in ../lib/utils.js.

@@ -1,4 +1,4 @@
-# `@ramdevcalope1995/create-my-next-app`
+# `@ramdevcalope1995/kindredaistudio`
 
 Scaffold a local Next.js app from the Kindred AI Studio template.
 
@@ -13,7 +13,7 @@ npm config set @ramdevcalope1995:registry https://npm.pkg.github.com
 Then run:
 
 ```bash
-npx @ramdevcalope1995/create-my-next-app my-project
+npx @ramdevcalope1995/kindredaistudio my-project
 ```
 
 The CLI will:

@@ -85,19 +85,19 @@ src/server/index.ts       Node/Express backend
 The standalone scaffold CLI lives in:
 
 ```text
-create-my-next-app-cli
+kindredaistudio-cli
 ```
 
 Before publishing it, update `TEMPLATE_REPO_URL` in:
 
 ```text
-create-my-next-app-cli/bin/cli.js
+kindredaistudio-cli/bin/cli.js
 ```
 
 Then publish that package to npm so users can run:
 
 ```bash
-npx create-my-next-app my-project
+npx kindredaistudio my-project
 ```
 
 ## Production Notes

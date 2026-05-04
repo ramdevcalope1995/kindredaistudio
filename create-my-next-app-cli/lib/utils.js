@@ -1,5 +1,5 @@
 /**
- * Utility helpers for create-my-next-app.
+ * Utility helpers for kindredaistudio.
  *
  * This module intentionally uses only built-in Node.js APIs. That keeps the
  * CLI small, quick to install through npx, and easy to audit.
@@ -12,7 +12,7 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 /**
- * Ask for a project name when the user runs `npx create-my-next-app`
+ * Ask for a project name when the user runs `npx kindredaistudio`
  * without an argument.
  */
 export async function promptForProjectName() {

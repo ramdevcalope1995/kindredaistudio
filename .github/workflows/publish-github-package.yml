@@ -18,7 +18,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: create-my-next-app-cli
+        working-directory: kindredaistudio-cli
 
     steps:
       - name: Checkout repository

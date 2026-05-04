@@ -1,16 +1,16 @@
 {
-  "name": "@ramdevcalope1995/create-my-next-app",
+  "name": "@ramdevcalope1995/kindredaistudio",
   "version": "1.0.0",
   "description": "Scaffold a local Next.js app from the Kindred AI Studio template.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "create-my-next-app": "./bin/cli.js"
+    "kindredaistudio": "./bin/cli.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ramdevcalope1995/kindredaistudio.git",
-    "directory": "create-my-next-app-cli"
+    "directory": "kindredaistudio-cli"
   },
   "bugs": {
     "url": "https://github.com/ramdevcalope1995/kindredaistudio/issues"
